@@ -1,57 +1,62 @@
 # SENTINEL — Cyber Threat Intelligence Dashboard
 
-SENTINEL is an interactive, browser-based Security Operations Center (SOC) simulation dashboard. Designed as a practical educational tool, it simulates the workflow, tools, and threat-remediation decisions of a Junior SOC Analyst at a fictional corporation ("NovaCorp Ltd"). 
+SENTINEL is a full-stack, real-time Security Operations Center (SOC) analyst simulation platform. It is designed to model the analytical tools, log auditing streams, and incident response playbooks used by entry-level threat analysts at a corporate command center ("NovaCorp Ltd").
 
-This application is built entirely as a single-file, serverless web app using native HTML5, CSS3, and vanilla JavaScript—requiring no build pipelines or frameworks.
-
-## Core Modules
-
-### 1. Live Threat Map (SVG)
-* Animates simulated attack lines converging from global coordinates (e.g., Moscow, Beijing, Lagos, São Paulo) onto NovaCorp's target headquarters in Nairobi, Kenya.
-* Color-coded indicator arcs visualize threat types (DDoS, Ransomware, Zero-day, Phishing, Brute Force).
-
-### 2. SIEM Event Logger & Detail Drawer
-* Provides a real-time scrolling terminal-style log feed of mock network telemetry.
-* Includes a CRT-scanline visual filter overlay.
-* Clicking any individual log item pauses telemetry and opens an Incident Detail Panel displaying standard MITRE ATT&CK technique mapping, affected asset metadata, and defensive recommendations.
-
-### 3. Interactive Analyst Workstation (Tabs)
-* **IP Reputation Checker:** Simulates an OSINT lookup returning geolocation, threat risk scoring (0–100), malware family association, and blacklist statuses.
-* **Hash Analyzer:** Simulates binary database comparisons (resembling VirusTotal) to return threat classifications and detection ratios.
-* **Phishing Email Sandbox:** Analyzes incoming message strings for suspicious keywords, urgent language, and technical mismatches.
-* **Vulnerability Scanner:** Simulates a port audit against designated domains, outputting open ports, service versions, matched CVE numbers, and patch guidelines.
-
-### 4. Incident Response Playbook Panel
-* Fires active alert overrides on critical events, giving the user 60 seconds to select a playbook remediation step (e.g., Isolate Host, Firewall IP Block, Escalate to Tier-2, or Ignore).
-* Implements a state-machine that logs success or failure metrics based on whether the chosen action is appropriate for the threat vector.
-
-### 5. Threat Intelligence & Dark Web Monitoring
-* Features active threat actor monitor feeds (APT profiles), global DEFCON status dials, and mock dark web scanners detailing credential leaks, API exposures, and forum mentions.
+The system consists of a cinematic frontend dashboard connected to a Python Flask API to retrieve real-world threat telemetry.
 
 ---
 
-## Gamification & Educational Layer
+## System Architecture
 
-* **Performance Scorecard:** Tracks real-time operations metrics: *Threats Neutralized, Breaches, Mean Time to Detect (MTTD),* and *Mean Time to Respond (MTTR)*.
-* **XP & Tier Ranks:** Triage decisions yield Experience Points (XP) allowing progression through analyst ranks: *Junior Analyst ➔ Analyst ➔ Senior Analyst ➔ Threat Hunter ➔ SOC Lead*.
-* **Achievement Engine:** Pop-up banners reward defensive milestones (e.g., *First Blood, Speed Demon*).
-* **Learn Mode Sidebar:** A collapsible glossary defining cybersecurity vocabulary directly referenced in the simulation (such as SIEM, IOCs, CVE, CVSS, and MTTD/MTTR).
+* **Frontend:** Single-file HTML5, CSS3, and ES6 JavaScript. Uses HTML5 Canvas for animations, inline SVGs for threat mapping, and CSS CRT-scanline filters.
+* **Backend:** Python Flask API incorporating real OSINT libraries, DNS resolvers, and public threat intelligence feeds.
 
 ---
 
-## Technical Design Specifications
+## Core Capabilities & Modules
 
-* **Color Palette:** Deep background values (`#05080c`), cyan highlight accents (`#00d4ff`), and standard alert indicators (amber for warnings, red for critical actions).
-* **Matrix Rain Background:** Animated via a low-opacity, high-performance HTML5 Canvas script to preserve CPU headroom.
-* **Responsive Layout:** Designed to scale dynamically across laptop and desktop monitor screen dimensions.
-* **External Integration:** Handled natively with the browser's DOM; optionally pulls Chart.js from a CDN if you decide to extend the reporting graph elements.
+### 1. Active Threat Intelligence Map
+* Coordinates global attack vectors using an animated, responsive inline SVG map converging on NovaCorp’s headquarters in Nairobi, Kenya.
+* Highlights real-time telemetry details, including origin city, country, vector class, and severity levels.
+
+### 2. SIEM Event Logger & Detail Panel
+* Streams live mock telemetry logs mimicking an active SIEM environment.
+* Clicking any individual log item parses its metadata, displaying standard MITRE ATT&CK technique mappings, impact analysis, and remediation steps.
+
+### 3. Incident Response Playbook Console
+* Triggers visual red alerts on critical threats (e.g., Ransomware execution or port scanning), initiating a 60-second response countdown timer.
+* Logs analyst decisions (Isolate Host, Block IP, Escalate, Ignore), tracking outcomes, Mean Time to Detect (MTTD), and Mean Time to Respond (MTTR).
+
+### 4. Interactive Analyst Workstation (Real APIs)
+* **IP Reputation Checker:** Queries the [AbuseIPDB API](https://www.abuseipdb.com/) to analyze external addresses for malicious scoring, ISP operators, and geolocation parameters.
+* **Hash Analyzer:** Verifies cryptographic signatures (MD5/SHA256) against known malicious binaries.
+* **Phishing Sandbox:** Analyzes raw mail header blocks for SPF mismatches, sender spoofing, and social engineering patterns.
+* **Vulnerability Port Scanner:** Audits target domains to map open ports, service versions, matched CVE numbers, and patch guidelines.
 
 ---
 
-## Getting Started / Deployment
+## Backend API Endpoints
 
-Because the application is completely self-contained within a single HTML file and uses mocked database responses, deployment is simple:
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/ip/<ip_address>` | Performs WHOIS lookups, reverse DNS, and queries AbuseIPDB for reputation scores. |
+| `GET` | `/api/dns/<domain>` | Resolves DNS records (A, MX, NS, TXT, CNAME) and flags configuration risks. |
+| `POST` | `/api/analyze/headers` | Parses raw email headers to validate SPF/DKIM/DMARC alignment. |
+| `GET` | `/api/threats/feed` | Pulls live malicious indicators from the AlienVault OTX API. |
 
-1. Clone or download the repository:
+---
+
+## Local Installation & Setup
+
+### Prerequisites
+Before starting the backend, ensure your operating system has the system-level `whois` binaries installed:
+* **macOS:** `brew install whois`
+* **Linux (Ubuntu/Debian):** `sudo apt-get install whois`
+* **Windows:** (No action required; managed automatically by library wrappers).
+
+### Installation Steps
+
+1. Clone this repository and navigate to the backend folder:
    ```bash
-   git clone https://github.com/yourusername/sentinel-dashboard.git
+   git clone https://github.com/your-username/your-repo-name.git
+   cd sentinel-backend

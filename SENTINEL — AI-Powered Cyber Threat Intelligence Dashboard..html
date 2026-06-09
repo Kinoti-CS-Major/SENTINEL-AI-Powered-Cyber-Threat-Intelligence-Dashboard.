@@ -1,0 +1,1424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SENTINEL // Cyber Threat Intelligence Command</title>
+  
+  <!-- Fonts: Monospace for data elements, Space Grotesk for headers -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  
+  <!-- Chart.js for visualization charts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    :root {
+      --bg-color: #05080c;
+      --card-bg: #0b111a;
+      --card-border: #132237;
+      --accent-cyan: #00d4ff;
+      --accent-cyan-glow: rgba(0, 212, 255, 0.15);
+      --system-red: #ff3b3b;
+      --system-red-glow: rgba(255, 59, 59, 0.2);
+      --system-amber: #ffb800;
+      --system-blue: #3b82f6;
+      --system-purple: #a855f7;
+      --text-main: #d1f4ff;
+      --text-muted: #5f7a97;
+      --terminal-green: #39ff14;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      font-family: 'Fira Code', 'Courier New', monospace;
+      min-height: 100vh;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    /* Subtle background matrix rain canvas */
+    #matrix-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 0;
+      opacity: 0.05;
+      pointer-events: none;
+    }
+
+    /* Hover tooltips */
+    .tooltip {
+      position: relative;
+      border-bottom: 1px dashed var(--accent-cyan);
+      cursor: help;
+    }
+    .tooltip::after {
+      content: attr(data-tip);
+      position: absolute;
+      bottom: 125%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--card-bg);
+      border: 1px solid var(--accent-cyan);
+      color: var(--accent-cyan);
+      padding: 6px 12px;
+      border-radius: 4px;
+      white-space: nowrap;
+      font-size: 0.75rem;
+      z-index: 999;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+      box-shadow: 0 5px 15px rgba(0, 212, 255, 0.3);
+    }
+    .tooltip:hover::after {
+      opacity: 1;
+    }
+
+    /* Shell Header */
+    header {
+      position: relative;
+      z-index: 10;
+      background-color: rgba(11, 17, 26, 0.9);
+      border-bottom: 2px solid var(--accent-cyan);
+      box-shadow: 0 0 20px var(--accent-cyan-glow);
+      padding: 0.8rem 1.5rem;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .header-logo {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--accent-cyan);
+      letter-spacing: 2px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .header-logo span {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      background-color: var(--accent-cyan);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--accent-cyan);
+      animation: pulse-glow 1.5s infinite alternate;
+    }
+
+    .header-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+    .meta-val {
+      color: var(--accent-cyan);
+    }
+
+    /* Main Grid Layout */
+    .app-container {
+      position: relative;
+      z-index: 10;
+      max-width: 1800px;
+      margin: 1.5rem auto;
+      padding: 0 1.5rem;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+    }
+
+    @media (min-width: 1200px) {
+      .app-container {
+        grid-template-columns: 1.3fr 0.7fr;
+      }
+    }
+
+    /* Panel Card Styles */
+    .panel {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 4px;
+      padding: 1.2rem;
+      position: relative;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+    .panel:hover {
+      border-color: rgba(0, 212, 255, 0.3);
+      box-shadow: 0 0 15px rgba(0, 212, 255, 0.05);
+    }
+    .panel-header {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--accent-cyan);
+      margin-bottom: 1rem;
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* Map Display */
+    .map-container {
+      height: 350px;
+      background: #020406;
+      border: 1px solid var(--card-border);
+      border-radius: 4px;
+      position: relative;
+      overflow: hidden;
+    }
+    .map-svg {
+      width: 100%;
+      height: 100%;
+    }
+    .map-alert-overlay {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      background: rgba(11, 17, 26, 0.95);
+      border: 1px solid var(--accent-cyan);
+      border-radius: 3px;
+      padding: 8px 12px;
+      font-size: 0.75rem;
+      max-width: 250px;
+    }
+
+    /* Incident Feed Terminal with CRT Effect */
+    .feed-terminal {
+      height: 250px;
+      background-color: #030508;
+      border: 1px solid var(--card-border);
+      border-radius: 4px;
+      padding: 10px;
+      overflow-y: auto;
+      font-size: 0.8rem;
+      line-height: 1.4;
+      position: relative;
+    }
+    /* CRT Scanlines Overlay */
+    .feed-terminal::before {
+      content: " ";
+      display: block;
+      position: absolute;
+      top: 0; left: 0; bottom: 0; right: 0;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+      z-index: 2;
+      background-size: 100% 3px, 3px 100%;
+      pointer-events: none;
+    }
+    .log-entry {
+      margin-bottom: 6px;
+      cursor: pointer;
+      padding: 2px 5px;
+      border-radius: 3px;
+      transition: background 0.15s;
+    }
+    .log-entry:hover {
+      background: rgba(0, 212, 255, 0.1);
+    }
+    .log-CRITICAL { color: var(--system-red); }
+    .log-HIGH { color: var(--system-amber); }
+    .log-MED { color: var(--system-blue); }
+    .log-INFO { color: var(--text-muted); }
+
+    /* Workstation Module Tabs */
+    .tab-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      border-bottom: 1px solid var(--card-border);
+      margin-bottom: 1rem;
+    }
+    .tab-btn {
+      background: none;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 0.8rem;
+      padding: 8px 12px;
+      cursor: pointer;
+      text-transform: uppercase;
+      transition: all 0.2s;
+    }
+    .tab-btn.active, .tab-btn:hover {
+      color: var(--accent-cyan);
+      border-color: var(--card-border) var(--card-border) transparent var(--card-border);
+      background: var(--card-bg);
+      border-bottom: 2px solid var(--accent-cyan);
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+
+    /* Analyst Tools Specific Design */
+    .tool-group {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 15px;
+      margin-bottom: 1rem;
+    }
+    @media (min-width: 600px) {
+      .tool-group {
+        grid-template-columns: 1fr auto;
+      }
+    }
+    .control-input {
+      background: #020406;
+      border: 1px solid var(--card-border);
+      border-radius: 3px;
+      color: var(--accent-cyan);
+      padding: 8px 12px;
+      font-family: 'Fira Code', monospace;
+      font-size: 0.85rem;
+      outline: none;
+      width: 100%;
+    }
+    .control-input:focus {
+      border-color: var(--accent-cyan);
+    }
+    .btn {
+      background: transparent;
+      border: 1px solid var(--accent-cyan);
+      color: var(--accent-cyan);
+      padding: 8px 20px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 500;
+      text-transform: uppercase;
+      font-size: 0.8rem;
+      letter-spacing: 1px;
+      cursor: pointer;
+      border-radius: 3px;
+      transition: all 0.2s;
+    }
+    .btn:hover {
+      background: var(--accent-cyan);
+      color: var(--bg-color);
+      box-shadow: 0 0 10px rgba(0, 212, 255, 0.4);
+    }
+    .results-display {
+      background: #020406;
+      border: 1px solid var(--card-border);
+      padding: 12px;
+      border-radius: 3px;
+      font-size: 0.75rem;
+      line-height: 1.5;
+      overflow-x: auto;
+    }
+
+    /* Incidents and Banner alerts */
+    .emergency-banner {
+      position: fixed;
+      top: 0; left: 0; width: 100%;
+      background: var(--system-red);
+      color: #fff;
+      text-align: center;
+      padding: 10px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 700;
+      letter-spacing: 2px;
+      z-index: 100;
+      transform: translateY(-100%);
+      transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      box-shadow: 0 5px 20px var(--system-red-glow);
+    }
+    .emergency-banner.active {
+      transform: translateY(0);
+    }
+
+    /* Scoreboard Dashboard elements */
+    .scoreboard {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-bottom: 1rem;
+    }
+    @media (min-width: 600px) {
+      .scoreboard {
+        grid-template-columns: repeat(4, 1fr);
+      }
+    }
+    .score-box {
+      background: #060a10;
+      border: 1px solid var(--card-border);
+      padding: 10px;
+      border-radius: 3px;
+      text-align: center;
+    }
+    .score-label {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 3px;
+    }
+    .score-value {
+      font-size: 1.1rem;
+      font-weight: bold;
+      color: var(--accent-cyan);
+    }
+
+    /* Progress and XP Leveling */
+    .progress-track {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.7rem;
+      margin-bottom: 5px;
+    }
+    .progress-bar-bg {
+      height: 6px;
+      background: var(--card-border);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 1rem;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--accent-cyan);
+      box-shadow: 0 0 10px var(--accent-cyan);
+      transition: width 0.3s ease;
+    }
+
+    /* Sidebar Panels */
+    .threat-status-box {
+      border: 1px solid var(--card-border);
+      background: #020406;
+      padding: 12px;
+      border-radius: 3px;
+      margin-bottom: 1rem;
+      text-align: center;
+    }
+    .status-dial {
+      font-size: 1.5rem;
+      font-weight: bold;
+      margin: 8px 0;
+      letter-spacing: 2px;
+    }
+
+    /* Achievement badges popups */
+    .badge-popup {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: var(--card-bg);
+      border: 1px solid var(--accent-cyan);
+      box-shadow: 0 0 15px rgba(0, 212, 255, 0.4);
+      padding: 12px 20px;
+      border-radius: 4px;
+      z-index: 101;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transform: translateX(200%);
+      transition: transform 0.4s ease-out;
+    }
+    .badge-popup.active {
+      transform: translateX(0);
+    }
+    .badge-icon {
+      font-size: 1.5rem;
+    }
+    .badge-details h4 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 0.85rem;
+      color: var(--accent-cyan);
+    }
+    .badge-details p {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+
+    /* Split panel views */
+    .split-panel {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1rem;
+    }
+    @media (min-width: 768px) {
+      .split-panel {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    /* Interactive Details Overlay Pane */
+    .drawer-overlay {
+      position: fixed;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 102;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    .drawer-overlay.active {
+      display: flex;
+    }
+    .drawer {
+      background: var(--card-bg);
+      border: 1px solid var(--accent-cyan);
+      border-radius: 4px;
+      width: 90%;
+      max-width: 600px;
+      padding: 1.5rem;
+      box-shadow: 0 0 30px var(--accent-cyan-glow);
+    }
+
+    /* Learn Mode Panel */
+    .learn-toggle {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      z-index: 99;
+      background: var(--card-bg);
+      border: 1px solid var(--accent-cyan);
+      color: var(--accent-cyan);
+      padding: 8px 15px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      cursor: pointer;
+    }
+    .learn-sidebar {
+      position: fixed;
+      top: 0; right: 0; width: 350px; height: 100%;
+      background: var(--card-bg);
+      border-left: 1px solid var(--card-border);
+      z-index: 98;
+      transform: translateX(100%);
+      transition: transform 0.3s ease;
+      padding: 1.5rem;
+      overflow-y: auto;
+      box-shadow: -5px 0 15px rgba(0,0,0,0.5);
+    }
+    .learn-sidebar.active {
+      transform: translateX(0);
+    }
+
+    @keyframes pulse-glow {
+      from { opacity: 0.4; }
+      to { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Matrix Background -->
+  <canvas id="matrix-canvas"></canvas>
+
+  <!-- Critical Attack Emergency Notification Banner -->
+  <div class="emergency-banner" id="sec-alarm">
+    CRITICAL VECTOR THREAT IDENTIFIED // RESPOND IMMEDIATELY TO NEUTRALIZE PORTAL SINK
+  </div>
+
+  <!-- Shell Header -->
+  <header>
+    <div class="header-logo">
+      <span></span> SENTINEL // THREAT INTELLIGENCE
+    </div>
+    <div class="header-meta">
+      <div>ORG: <span class="meta-val">NOVACORP LTD</span></div>
+      <div>ANALYST: <span class="meta-val">Brian Kinoti</span></div>
+      <div>CLEARANCE: <span class="meta-val" id="analyst-rank">Tier 1 // Junior Analyst</span></div>
+      <div>TIME: <span class="meta-val" id="system-clock">00:00:00</span></div>
+      <div>DEFCON LEVEL: <span class="meta-val" id="defcon-value" style="color: var(--system-amber)">3</span></div>
+    </div>
+  </header>
+
+  <!-- Interactive Dashboard Workspace -->
+  <div class="app-container">
+    
+    <!-- LEFT COLUMN: Maps, Feeds, Workstation Tools -->
+    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+      
+      <!-- Live Map Panel -->
+      <div class="panel">
+        <div class="panel-header">
+          <span>MODULE 01 // REAL-TIME VECTOR ATTACK PATHS</span>
+          <span style="font-size: 0.7rem; color: var(--text-muted)">TARGET HQ: NAIROBI, KE</span>
+        </div>
+        <div class="map-container">
+          <svg class="map-svg" viewBox="0 0 1000 500" xmlns="http://www.w3.org/2000/svg">
+            <!-- Simplified global SVG outlines -->
+            <rect width="1000" height="500" fill="#020406" />
+            <!-- Map background grids representing telemetry points -->
+            <path d="M 0,100 L 1000,100 M 0,200 L 1000,200 M 0,300 L 1000,300 M 0,400 L 1000,400 M 100,0 L 100,500 M 200,0 L 200,500 M 300,0 L 300,500 M 400,0 L 400,500 M 500,0 L 500,500 M 600,0 L 600,500 M 700,0 L 700,500 M 800,0 L 800,500 M 900,0 L 900,500" stroke="#060e18" stroke-width="1" />
+            
+            <!-- Target Asset: Nairobi (HQ) -->
+            <circle cx="560" cy="280" r="8" fill="var(--accent-cyan)" />
+            <circle cx="560" cy="280" r="16" fill="none" stroke="var(--accent-cyan)" stroke-width="1.5">
+              <animate attributeName="r" values="8;24;8" dur="2s" repeatCount="indefinite" />
+              <animate attributeName="opacity" values="1;0;1" dur="2s" repeatCount="indefinite" />
+            </circle>
+            <text x="575" y="285" fill="var(--accent-cyan)" font-size="11" font-weight="bold">HQ_NAIROBI</text>
+
+            <!-- Vector Origins (Dynamic Nodes Added via JS) -->
+            <g id="attack-vectors-group"></g>
+          </svg>
+          <div class="map-alert-overlay" id="map-telemetry-box">
+            System standing by. Monitoring telemetry hooks...
+          </div>
+        </div>
+      </div>
+
+      <!-- Split Layout: Incident Feed + Action Console -->
+      <div class="split-panel">
+        
+        <!-- Live SIEM Logs Feed -->
+        <div class="panel">
+          <div class="panel-header">
+            <span>MODULE 02 // SIEM EVENT LOGGER</span>
+            <span style="font-size: 0.7rem; color: var(--text-muted)">CRT LOGGERS INJECTED</span>
+          </div>
+          <div class="feed-terminal" id="terminal-feed-logs">
+            <!-- Populated via JS -->
+          </div>
+        </div>
+
+        <!-- Incident Response Triage Panel -->
+        <div class="panel" id="incident-response-pane">
+          <div class="panel-header">
+            <span>MODULE 04 // DEFENSIVE PLAYBOOK PANEL</span>
+            <span id="response-timer" style="color: var(--system-red); font-size: 0.8rem; display:none;">TIME REMAINING: 60s</span>
+          </div>
+          
+          <div id="remediation-console-empty" style="text-align: center; padding: 2.5rem 0; color: var(--text-muted)">
+            <p>Ready to monitor network. Critical alarms will trigger emergency playbooks.</p>
+          </div>
+
+          <div id="remediation-console-active" style="display: none;">
+            <p style="color: var(--system-red); font-weight: bold; margin-bottom: 0.5rem;" id="active-alert-title">CRITICAL RISK ALARM IN PROGRESS</p>
+            <p id="active-alert-desc" style="font-size: 0.8rem; margin-bottom: 1rem; color: var(--text-bright);"></p>
+            
+            <div class="choices-container" style="gap: 8px;">
+              <button class="btn btn-red" style="width: 100%; margin: 0; text-align: left;" onclick="triageIncident('isolate')">[ACTION 1] Isolate target host from LAN segment</button>
+              <button class="btn btn-red" style="width: 100%; margin: 0; text-align: left;" onclick="triageIncident('block')">[ACTION 2] Add source IP blocks at firewall gateway</button>
+              <button class="btn btn-red" style="width: 100%; margin: 0; text-align: left;" onclick="triageIncident('escalate')">[ACTION 3] Dispatch ticket to Tier-2 SOC Response Analysts</button>
+              <button class="btn btn-red" style="width: 100%; margin: 0; text-align: left;" onclick="triageIncident('ignore')">[ACTION 4] Dismiss as certified false-positive alert</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Workstation Console with interactive tool Tabs -->
+      <div class="panel">
+        <div class="panel-header">MODULE 03 // ANALYST WORKSTATION ENGINE</div>
+        
+        <div class="tab-nav">
+          <button class="tab-btn active" onclick="activateTab('ip-checker')">IP Reputation</button>
+          <button class="tab-btn" onclick="activateTab('hash-analyzer')">Hash Analyzer</button>
+          <button class="tab-btn" onclick="activateTab('email-analyzer')">Phishing Sandbox</button>
+          <button class="tab-btn" onclick="activateTab('vuln-scanner')">Vulnerability Scanner</button>
+        </div>
+
+        <!-- TAB 1: IP REPUTATION CHECKER -->
+        <div class="tab-content active" id="tab-ip-checker">
+          <p style="margin-bottom: 1rem; font-size: 0.8rem; color: var(--text-muted);">Perform mock OSINT lookup on external targets to establish domain, malicious profile score, and ISP parameters.</p>
+          <div class="tool-group">
+            <input type="text" class="control-input" id="ip-input-field" placeholder="Target IPv4 Address (e.g., 185.220.101.5)" value="185.220.101.5">
+            <button class="btn" onclick="analyzeIPReputation()">SCAN ADDRESS</button>
+          </div>
+          <div class="results-display" id="ip-results">
+            System waiting for IP parameters...
+          </div>
+        </div>
+
+        <!-- TAB 2: HASH ANALYZER -->
+        <div class="tab-content" id="tab-hash-analyzer">
+          <p style="margin-bottom: 1rem; font-size: 0.8rem; color: var(--text-muted);">Perform cryptographic signature checks against known malicious binaries.</p>
+          <div class="tool-group">
+            <input type="text" class="control-input" id="hash-input-field" placeholder="MD5 / SHA-256 Signature" value="f38e7b16521a02938de12019ab2931bc">
+            <button class="btn" onclick="analyzeFileHash()">ANALYZE SIGNATURE</button>
+          </div>
+          <div class="results-display" id="hash-results">
+            Waiting for binary payload signatures...
+          </div>
+        </div>
+
+        <!-- TAB 3: PHISHING EMAIL ANALYZER -->
+        <div class="tab-content" id="tab-email-analyzer">
+          <p style="margin-bottom: 1rem; font-size: 0.8rem; color: var(--text-muted);">Inspect raw mail assets for SPF configurations, domain mismatch patterns, and social engineering language.</p>
+          <div class="tool-group" style="grid-template-columns: 1fr;">
+            <textarea class="control-input" id="email-text-field" rows="4" style="resize: none;" placeholder="Paste raw mail structures or message body content here..."></textarea>
+            <button class="btn" style="align-self: flex-start;" onclick="analyzePhishingAssets()">RUN ANALYSIS</button>
+          </div>
+          <div class="results-display" id="email-results">
+            Ready to evaluate mail indicators...
+          </div>
+        </div>
+
+        <!-- TAB 4: VULNERABILITY SCANNER -->
+        <div class="tab-content" id="tab-vuln-scanner">
+          <p style="margin-bottom: 1rem; font-size: 0.8rem; color: var(--text-muted);">Probe localized services, open ports, and map associated CVE exposures across servers.</p>
+          <div class="tool-group">
+            <input type="text" class="control-input" id="vuln-input-field" placeholder="Target Host or Domain name" value="dev-portal.novacorp.ke">
+            <button class="btn" onclick="runVulnerabilityAudit()">RUN PORT AUDIT</button>
+          </div>
+          <div class="results-display" id="vuln-results">
+            Ready to initialize vulnerability audits...
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- RIGHT COLUMN: Scoreboard, Stats, Threat Intelligence, Dark Web Monitor -->
+    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+      
+      <!-- Live Stats Panel -->
+      <div class="panel">
+        <div class="panel-header">ANALYST PERFORMANCE CORE</div>
+        <div class="scoreboard">
+          <div class="score-box">
+            <div class="score-label">Neutralized</div>
+            <div class="score-value" id="stats-neutralized">0</div>
+          </div>
+          <div class="score-box">
+            <div class="score-label">Breaches</div>
+            <div class="score-value" id="stats-breaches">0</div>
+          </div>
+          <div class="score-box">
+            <div class="score-label">MTTD (Sec)</div>
+            <div class="score-value" id="stats-mttd">0s</div>
+          </div>
+          <div class="score-box">
+            <div class="score-label">MTTR (Sec)</div>
+            <div class="score-value" id="stats-mttr">0s</div>
+          </div>
+        </div>
+
+        <div class="progress-track">
+          <span>PROGRESS TO NEXT LEVEL</span>
+          <span id="progress-text">0 / 100 XP</span>
+        </div>
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill" id="progress-fill"></div>
+        </div>
+      </div>
+
+      <!-- Threat Level and Today's Intel Briefing -->
+      <div class="panel">
+        <div class="panel-header">MODULE 05 // REAL-TIME THREAT INTEL BRIEFING</div>
+        
+        <div class="threat-status-box">
+          <div class="score-label">GLOBAL CONTEXT STATUS</div>
+          <div class="status-dial" id="global-status-dial" style="color: var(--system-amber)">DEFCON 3 (ELEVATED)</div>
+        </div>
+
+        <p style="color: var(--accent-cyan); font-weight: bold; font-size: 0.85rem; margin-bottom: 0.5rem;">ACTIVE THREAT ACTORS MONITOR:</p>
+        <div id="intel-actor-box" style="font-size: 0.75rem; color: var(--text-bright); line-height: 1.4; margin-bottom: 1rem;">
+          <!-- Dynamically generated profiles -->
+        </div>
+
+        <p style="color: var(--accent-cyan); font-weight: bold; font-size: 0.85rem; margin-bottom: 0.5rem;">TRENDING CRITICAL VULNERABILITIES:</p>
+        <div id="intel-cve-box" style="font-size: 0.75rem; color: var(--text-bright); line-height: 1.4;">
+          <!-- Dynamically generated trending CVEs -->
+        </div>
+      </div>
+
+      <!-- Dark Web Leak Scanners -->
+      <div class="panel" style="border-left: 4px solid var(--system-red);">
+        <div class="panel-header" style="color: var(--system-red);">MODULE 06 // DARK WEB MONITOR ACTIVE</div>
+        
+        <div style="background: rgba(255, 59, 59, 0.03); border: 1px dashed var(--system-red-glow); padding: 12px; border-radius: 3px; font-size: 0.75rem; line-height: 1.5;">
+          <p style="color: var(--system-red); font-weight: bold; text-align: center; margin-bottom: 8px;">NOVACORP CRITICAL ASSET LEAK CHECK</p>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+            <span>Exposed User Credentials:</span>
+            <span id="dark-creds" style="color: var(--system-red); font-weight: bold;">0</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+            <span>Exposed Production API Keys:</span>
+            <span id="dark-keys" style="color: var(--system-red); font-weight: bold;">0</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+            <span>Hacker Forum Mentions:</span>
+            <span id="dark-mentions" style="color: var(--system-red); font-weight: bold;">0</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span>Total Exposed Records Count:</span>
+            <span id="dark-records" style="color: var(--system-red); font-weight: bold;">0</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Interactive Details Pane Drawer Overlay -->
+  <div class="drawer-overlay" id="detail-drawer">
+    <div class="drawer">
+      <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--accent-cyan); padding-bottom: 0.5rem; margin-bottom: 1rem;">
+        <h3 id="drawer-title" style="font-family: 'Space Grotesk', sans-serif; color: var(--accent-cyan);">INCIDENT DETAILS</h3>
+        <button onclick="closeDrawer()" style="background: none; border: none; color: var(--accent-cyan); cursor: pointer; font-family: monospace;">[CLOSE]</button>
+      </div>
+      <div id="drawer-body" style="font-size: 0.8rem; line-height: 1.5; color: var(--text-bright);">
+        <!-- Content injected dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Educational Sidebar and Mode Selector -->
+  <button class="learn-toggle" onclick="toggleLearnMode()">[LEARN MODE MODULE]</button>
+  <div class="learn-sidebar" id="learn-sidebar-panel">
+    <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--accent-cyan); padding-bottom: 0.5rem; margin-bottom: 1rem;">
+      <h3 style="font-family: 'Space Grotesk', sans-serif; color: var(--accent-cyan);">CONCEPT DEFINITIONS</h3>
+      <button onclick="toggleLearnMode()" style="background: none; border: none; color: var(--accent-cyan); cursor: pointer; font-family: monospace;">[X]</button>
+    </div>
+    <div style="font-size: 0.75rem; line-height: 1.5; display: flex; flex-direction: column; gap: 15px;">
+      <div>
+        <h4 style="color: var(--accent-cyan);">1. SIEM (Security Info & Event Management)</h4>
+        <p>Software platforms that aggregate, analyze, and map security telemetry from firewalls, servers, and endpoint security agents, transforming raw telemetry into readable, structured threat incidents.</p>
+      </div>
+      <div>
+        <h4 style="color: var(--accent-cyan);">2. MITRE ATT&CK Framework</h4>
+        <p>A globally-accessible knowledge base of adversary tactics, techniques, and procedures (TTPs) based on real-world threat monitoring logs. It provides standard reference classifications for defensive design auditing.</p>
+      </div>
+      <div>
+        <h4 style="color: var(--accent-cyan);">3. IOCs (Indicators of Compromise)</h4>
+        <p>Forensic artifacts observed on networks or hosts (e.g., known malicious domain names, file hashes, IPs) that verify a system compromise has taken place.</p>
+      </div>
+      <div>
+        <h4 style="color: var(--accent-cyan);">4. CVSS (Common Vulnerability Scoring System)</h4>
+        <p>A standardized numerical rating scale (0 to 10) expressing the relative severity and impact mechanics of identified security vulnerabilities, with values of 9.0+ categorized as Critical threats.</p>
+      </div>
+      <div>
+        <h4 style="color: var(--accent-cyan);">5. MTTD & MTTR (Detection vs. Resolution)</h4>
+        <p>Mean Time to Detect (MTTD) tracks the temporal speed with which security anomalies are identified. Mean Time to Respond (MTTR) gauges the velocity of operational security actions deployed to contain threats.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Achievements Badge Popup -->
+  <div class="badge-popup" id="achievement-popup">
+    <div class="badge-icon" id="achievement-icon">🏆</div>
+    <div class="badge-details">
+      <h4 id="achievement-title">Achievement Block unlocked</h4>
+      <p id="achievement-desc">You completed a standard defensive milestone.</p>
+    </div>
+  </div>
+
+  <script>
+    // System clock logic
+    function updateClock() {
+      const clockEl = document.getElementById('system-clock');
+      const now = new Date();
+      clockEl.textContent = now.toTimeString().split(' ')[0];
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // Subtle background matrix rain canvas loop
+    const canvas = document.getElementById('matrix-canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const chars = "0101100101011110";
+    const charArray = chars.split("");
+    const fontSize = 14;
+    const columns = canvas.width / fontSize;
+    const drops = [];
+    for (let x = 0; x < columns; x++) drops[x] = 1;
+
+    function drawMatrix() {
+      ctx.fillStyle = "rgba(5, 8, 12, 0.05)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#00d4ff";
+      ctx.font = fontSize + "px monospace";
+      for (let i = 0; i < drops.length; i++) {
+        const text = charArray[Math.floor(Math.random() * charArray.length)];
+        ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+        if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+          drops[i] = 0;
+        }
+        drops[i]++;
+      }
+    }
+    setInterval(drawMatrix, 40);
+
+    // Dynamic Mock Databases for Tools and Simulations
+    const ipDatabase = {
+      "185.220.101.5": {
+        city: "Berlin", country: "Germany", isp: "M247 Europe",
+        score: 92, malware: "Colibri Loader, Lokibot",
+        campaigns: "Operation SilverLines", status: "BLOCKED (AbuseIPDB)",
+        rec: "BLOCK"
+      },
+      "45.227.254.12": {
+        city: "São Paulo", country: "Brazil", isp: "Comunidade Telecom",
+        score: 74, malware: "Grandoreiro Banker",
+        campaigns: "FIN7 Financial Probes", status: "MONITORED (VirusTotal)",
+        rec: "MONITOR"
+      },
+      "103.22.201.44": {
+        city: "Beijing", country: "China", isp: "Chinanet Backbone",
+        score: 88, malware: "Cobalt Strike Beacons",
+        campaigns: "APT41 Operation CloudShield", status: "BLOCKED (Shodan)",
+        rec: "BLOCK"
+      },
+      "8.8.8.8": {
+        city: "Mountain View", country: "United States", isp: "Google LLC",
+        score: 0, malware: "None detected",
+        campaigns: "None", status: "WHITELISTED (Safe)",
+        rec: "WHITELIST"
+      }
+    };
+
+    const hashDatabase = {
+      "f38e7b16521a02938de12019ab2931bc": {
+        ratio: "58/72", family: "Trojan.Agent/WannaCry",
+        seen: "2017-05-12", type: "Ransomware Crypter",
+        details: "Cryptographic ransomware binary utilizing MS17-010 EternalBlue exploits to propagate across networks."
+      },
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855": {
+        ratio: "0/74", family: "Clean File",
+        seen: "2015-09-20", type: "SHA-256 Null payload",
+        details: "Standard cryptographic null hash signature. Non-executable, zero malicious triggers detected."
+      }
+    };
+
+    const phishingIndicators = {
+      "letmein": { verdict: "SUSPICIOUS", score: 65, reasons: ["Suspicious access request", "Absence of corporate SPF validations"] },
+      "urgent": { verdict: "PHISHING", score: 88, reasons: ["High urgency vocabulary detected", "Sender domain mimicking official corporate assets"] },
+      "payroll": { verdict: "PHISHING", score: 95, reasons: ["Unauthorized financial asset redirection request", "Sender domain address alignment fails validation checks"] }
+    };
+
+    const vulnDatabase = {
+      "dev-portal.novacorp.ke": {
+        host: "192.168.4.52",
+        ports: [
+          { port: 22, svc: "OpenSSH 7.2p2", cve: "CVE-2016-6210", cvss: 5.3, patch: "Upgrade system baseline package to OpenSSH 8.4+" },
+          { port: 80, svc: "Apache httpd 2.4.18", cve: "CVE-2017-9798", cvss: 7.5, patch: "Migrate static assets and deploy Apache version 2.4.46+" },
+          { port: 3306, svc: "MySQL 5.5.47", cve: "CVE-2016-6662", cvss: 8.8, patch: "Apply immediate schema parameter restrictions and upgrade to MySQL 5.7+" }
+        ]
+      }
+    };
+
+    // Threat Actors and trending CVE database
+    const threatActors = [
+      { name: "APT28 (Fancy Bear)", origin: "Russia", targets: "Government, Defense", status: "Active campaign probing NATO logistics chains." },
+      { name: "Lazarus Group", origin: "North Korea", targets: "Finance, Cryptocurrency", status: "Targeting decentralized smart contract wallets." },
+      { name: "APT41 (Double Dragon)", origin: "China", targets: "Technology, Healthcare", status: "Exploiting vulnerable supply-chain code repositories." }
+    ];
+
+    const activeCVEs = [
+      { id: "CVE-2026-1044", score: "9.8 CRITICAL", desc: "Remote Code Execution (RCE) via deserialization." },
+      { id: "CVE-2026-9923", score: "8.5 HIGH", desc: "Buffer overflow vulnerability in standard server framework." }
+    ];
+
+    // Gamification System State
+    let xp = 0;
+    let rank = "Junior Analyst";
+    let scoreNeutralized = 0;
+    let scoreBreaches = 0;
+    let mttdSum = 0;
+    let mttrSum = 0;
+    let mttdCount = 0;
+    let mttrCount = 0;
+
+    let unlockedAchievements = [];
+
+    // Map Coordinates relative to Nairobi
+    const globalCities = [
+      { name: "Moscow", x: 620, y: 110, country: "Russia", type: "Ransomware Strike", severity: "CRITICAL", color: "var(--system-red)" },
+      { name: "Beijing", x: 790, y: 190, country: "China", type: "Zero-Day Attack", severity: "HIGH", color: "var(--system-purple)" },
+      { name: "Lagos", x: 470, y: 270, country: "Nigeria", type: "DDoS Flood", severity: "MED", color: "var(--system-amber)" },
+      { name: "São Paulo", x: 310, y: 390, country: "Brazil", type: "Credential Stuffing", severity: "LOW", color: "var(--system-blue)" }
+    ];
+
+    // Track active Incident Alert State
+    let activeAlert = null;
+    let alertTimer = null;
+    let alertDuration = 60;
+    let alertTriggerTime = null;
+
+    // Standard SIEM Logging Array
+    const logsData = [];
+
+    // Initialize UI Panels
+    function initIntelPanel() {
+      // Build Threat Actors Monitor
+      const actorBox = document.getElementById('intel-actor-box');
+      actorBox.innerHTML = '';
+      threatActors.forEach(actor => {
+        actorBox.innerHTML += `
+          <div style="margin-bottom: 8px; border-bottom: 1px dashed var(--card-border); padding-bottom: 4px;">
+            <div style="color: var(--system-amber); font-weight: bold;">${actor.name} [${actor.origin}]</div>
+            <div>Target Focus: ${actor.targets}</div>
+            <div style="color: var(--text-muted); font-size: 0.7rem;">${actor.status}</div>
+          </div>
+        `;
+      });
+
+      // Build trending CVEs
+      const cveBox = document.getElementById('intel-cve-box');
+      cveBox.innerHTML = '';
+      activeCVEs.forEach(cve => {
+        cveBox.innerHTML += `
+          <div style="margin-bottom: 8px;">
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: var(--system-red); font-weight: bold;">${cve.id}</span>
+              <span style="color: var(--text-muted);">${cve.score}</span>
+            </div>
+            <div>${cve.desc}</div>
+          </div>
+        `;
+      });
+    }
+
+    // Interactive Tab Controller
+    function activateTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+      event.target.classList.add('active');
+      document.getElementById(`tab-${tabId}`).classList.add('active');
+    }
+
+    // Module 3, Tool 1: IP Reputation
+    function analyzeIPReputation() {
+      const input = document.getElementById('ip-input-field').value.trim();
+      const display = document.getElementById('ip-results');
+      
+      const record = ipDatabase[input];
+      if (record) {
+        display.innerHTML = `
+          <strong>TARGET SYSTEM ANALYSIS RESULT:</strong><br>
+          ──────────────────────────────────────────<br>
+          IP Address   : ${input}<br>
+          Geographic   : ${record.city}, ${record.country}<br>
+          ISP Operator : ${record.isp}<br>
+          Malicious Src: ${record.score}/100<br>
+          Active Family: ${record.malware}<br>
+          Audit Intel  : ${record.campaigns}<br>
+          Blacklist Status: ${record.status}<br><br>
+          RECOMMENDATION: <span style="color:${record.rec === 'BLOCK' ? 'var(--system-red)' : 'var(--accent-cyan)'}; font-weight:bold;">${record.rec} SYSTEM ACCESS</span>
+        `;
+        grantXP(15);
+      } else {
+        display.innerHTML = `
+          <strong>SCANNING IN PROCESS...</strong><br>
+          Target IP structure not matched within static local database repositories. Attempting automated baseline checks:<br>
+          IP ${input} returns 0 malicious detections. Host behaves securely.
+        `;
+      }
+    }
+
+    // Module 3, Tool 2: Hash Analyzer
+    function analyzeFileHash() {
+      const input = document.getElementById('hash-input-field').value.trim();
+      const display = document.getElementById('hash-results');
+
+      const record = hashDatabase[input];
+      if (record) {
+        display.innerHTML = `
+          <strong>CRYPTOGRAPHIC HASH MATCH:</strong><br>
+          ──────────────────────────────────────────<br>
+          Hash Signature : ${input}<br>
+          Malicious Ratio: ${record.ratio} (Detections)<br>
+          Binary Family  : ${record.family}<br>
+          First Seen     : ${record.seen}<br>
+          Classification : ${record.type}<br><br>
+          ANALYSIS DETAIL:<br>
+          ${record.details}
+        `;
+        grantXP(15);
+      } else {
+        display.innerHTML = `
+          <strong>SEARCH COMPLETED // ZERO MATCHES</strong><br>
+          Signature ${input} is not identified in active file repositories. Recommended action: Sandbox payload manually.
+        `;
+      }
+    }
+
+    // Module 3, Tool 3: Phishing Analyzer
+    function analyzePhishingAssets() {
+      const input = document.getElementById('email-text-field').value.trim().toLowerCase();
+      const display = document.getElementById('email-results');
+
+      if (!input) {
+        display.innerHTML = "Error: Text container empty. Paste mail payload components.";
+        return;
+      }
+
+      let matched = null;
+      for (let key in phishingIndicators) {
+        if (input.includes(key)) {
+          matched = phishingIndicators[key];
+          break;
+        }
+      }
+
+      if (matched) {
+        display.innerHTML = `
+          <strong>MAIL PAYLOAD VERDICT: <span style="color:var(--system-red)">${matched.verdict}</span></strong><br>
+          ──────────────────────────────────────────<br>
+          Confidence Score: ${matched.score}%<br>
+          Associated Risks Found:<br>
+          ${matched.reasons.map(r => `• ${r}`).join('<br>')}<br><br>
+          ACTION: Move asset to isolated quarantine systems. Do not interact.
+        `;
+        grantXP(20);
+        triggerAchievement("First Blood", "⚡ Detected a credential hijacking trap.");
+      } else {
+        display.innerHTML = `
+          <strong>ANALYSIS COMPLETE: LEGITIMATE VERDICT</strong><br>
+          No immediate phishing markers, SPF mismatches, or high-pressure terminology identified.
+        `;
+      }
+    }
+
+    // Module 3, Tool 4: Vuln Scanner
+    function runVulnerabilityAudit() {
+      const input = document.getElementById('vuln-input-field').value.trim();
+      const display = document.getElementById('vuln-results');
+
+      const record = vulnDatabase[input];
+      if (record) {
+        let portHTML = "";
+        record.ports.forEach(p => {
+          portHTML += `
+            Port: ${p.port} | Svc: ${p.svc} | ${p.cve} (CVSS ${p.cvss})<br>
+            ➔ Recommendation: ${p.patch}<br>
+            ──────────────────────────────────────────<br>
+          `;
+        });
+
+        display.innerHTML = `
+          <strong>TARGET VULNERABILITY REPORT: ${input}</strong><br>
+          IP Resolution : ${record.host}<br>
+          ──────────────────────────────────────────<br>
+          ${portHTML}
+        `;
+        grantXP(20);
+      } else {
+        display.innerHTML = `
+          <strong>AUDITING SYSTEM PORTS...</strong><br>
+          Scanning complete. All target host ports behave securely. No active CVE matches found.
+        `;
+      }
+    }
+
+    // Gamification Progression & Rank Updaters
+    function grantXP(amount) {
+      xp += amount;
+      if (xp >= 100) {
+        xp = xp % 100;
+        rankUp();
+      }
+      document.getElementById('progress-text').textContent = `${xp} / 100 XP`;
+      document.getElementById('progress-fill').style.width = `${xp}%`;
+    }
+
+    function rankUp() {
+      const ranks = ["Junior Analyst", "Analyst", "Senior Analyst", "Threat Hunter", "SOC Lead"];
+      const currentRankLabel = document.getElementById('analyst-rank').textContent.split('// ')[1];
+      const nextIdx = ranks.indexOf(currentRankLabel) + 1;
+
+      if (nextIdx < ranks.length) {
+        const newRank = ranks[nextIdx];
+        document.getElementById('analyst-rank').textContent = `Tier ${nextIdx + 1} // ${newRank}`;
+        triggerAchievement("Rank Upgraded", `🎖️ Promoted to ${newRank}!`);
+      }
+    }
+
+    function triggerAchievement(title, desc) {
+      if (unlockedAchievements.includes(title)) return;
+      unlockedAchievements.push(title);
+
+      const popup = document.getElementById('achievement-popup');
+      document.getElementById('achievement-title').textContent = title;
+      document.getElementById('achievement-desc').textContent = desc;
+
+      popup.classList.add('active');
+      setTimeout(() => {
+        popup.classList.remove('active');
+      }, 4000);
+    }
+
+    // Module 1: Live Threat Map SVG Interactions
+    function injectAttackNode() {
+      const target = globalCities[Math.floor(Math.random() * globalCities.length)];
+      const group = document.getElementById('attack-vectors-group');
+      const telemetryBox = document.getElementById('map-telemetry-box');
+
+      // Create animated SVG trace line converging on Nairobi (560, 280)
+      const pathId = `path-${Date.now()}`;
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      line.setAttribute("id", pathId);
+      line.setAttribute("d", `M ${target.x},${target.y} Q ${(target.x + 560)/2},${(target.y + 280)/2 - 50} 560,280`);
+      line.setAttribute("fill", "none");
+      line.setAttribute("stroke", target.color);
+      line.setAttribute("stroke-width", "1.5");
+      line.setAttribute("stroke-dasharray", "8, 8");
+      
+      // Animate line path towards the target
+      const anim = document.createElementNS("http://www.w3.org/2000/svg", "animate");
+      anim.setAttribute("attributeName", "stroke-dashoffset");
+      anim.setAttribute("values", "100;0");
+      anim.setAttribute("dur", "4s");
+      anim.setAttribute("repeatCount", "indefinite");
+      line.appendChild(anim);
+
+      // Create glowing impact point at source
+      const pulseCircle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      pulseCircle.setAttribute("cx", target.x);
+      pulseCircle.setAttribute("cy", target.y);
+      pulseCircle.setAttribute("r", "5");
+      pulseCircle.setAttribute("fill", target.color);
+
+      group.appendChild(line);
+      group.appendChild(pulseCircle);
+
+      // Update telemetry HUD box text
+      telemetryBox.innerHTML = `
+        <strong style="color: ${target.color};">ALERT: ACTIVE VECTOR STRIKE</strong><br>
+        Origin      : ${target.name}, ${target.country}<br>
+        Vector Class: ${target.type}<br>
+        Threat Level: ${target.severity}
+      `;
+
+      // Clear SVG line after animation cycles
+      setTimeout(() => {
+        if (line.parentNode) group.removeChild(line);
+        if (pulseCircle.parentNode) group.removeChild(pulseCircle);
+      }, 12000);
+
+      // Log to SIEM Terminal Feed
+      injectSIEMEvent(target.severity, `${target.type} attempt detected originating from ${target.name} IP space.`, target);
+    }
+
+    // Module 2: Ingest logs into SIEM Terminal logs
+    const mockIPs = ["185.220.101.5", "45.227.254.12", "103.22.201.44", "8.8.8.8", "192.168.1.45", "10.0.4.12"];
+    const attackTypes = [
+      { type: "Port scan detected", mitre: "T1046 - Network Service Scanning", rec: "Implement local IP throttling at firewall.", sev: "MED" },
+      { type: "Failed SSH logins on root", mitre: "T1110 - Brute Force Authentication", rec: "Isolate host and update administrator passwords.", sev: "HIGH" },
+      { type: "Suspicious outbound DNS resolution", mitre: "T1071.004 - C2 Web Protocols", rec: "Null-route target DNS domain globally.", sev: "MED" },
+      { type: "WannaCry ransomware binary execution", mitre: "T1486 - Data Encrypted for Impact", rec: "Isolate target machine immediately.", sev: "CRITICAL" }
+    ];
+
+    function injectSIEMEvent(severity = null, customDesc = null, mapData = null) {
+      const feed = document.getElementById('terminal-feed-logs');
+      const randomIP = mockIPs[Math.floor(Math.random() * mockIPs.length)];
+      const threat = attackTypes[Math.floor(Math.random() * attackTypes.length)];
+
+      const sev = severity || threat.sev;
+      const desc = customDesc || `${threat.type} triggered by source host: ${randomIP}`;
+
+      const eventObj = {
+        id: `INC-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+        timestamp: new Date().toLocaleTimeString(),
+        severity: sev,
+        ip: mapData ? "External Attack Source" : randomIP,
+        desc: desc,
+        mitre: threat.mitre,
+        rec: threat.rec,
+        triggerTime: Date.now()
+      };
+
+      logsData.push(eventObj);
+
+      const logElement = document.createElement('div');
+      logElement.className = `log-entry log-${sev}`;
+      logElement.innerHTML = `[${eventObj.timestamp}] [${sev}] ${desc}`;
+      logElement.onclick = () => openDrawer(eventObj);
+
+      feed.insertBefore(logElement, feed.firstChild);
+
+      // Automatically trigger incident response playbook alert if critical
+      if (sev === "CRITICAL" && !activeAlert) {
+        triggerCrisisAlert(eventObj);
+      }
+    }
+
+    // Module 4: Incident Response Engine (Crisis controller)
+    function triggerCrisisAlert(eventObj) {
+      activeAlert = eventObj;
+      alertTriggerTime = Date.now();
+      
+      const alarmBanner = document.getElementById('sec-alarm');
+      const activeConsole = document.getElementById('remediation-console-active');
+      const emptyConsole = document.getElementById('remediation-console-empty');
+      const timerLabel = document.getElementById('response-timer');
+
+      alarmBanner.classList.add('active');
+      emptyConsole.style.display = 'none';
+      activeConsole.style.display = 'block';
+      timerLabel.style.display = 'inline';
+
+      // Record detection telemetry metric
+      const mttd = Math.round((Date.now() - eventObj.triggerTime) / 1000);
+      mttdSum += mttd;
+      mttdCount++;
+      document.getElementById('stats-mttd').textContent = `${Math.round(mttdSum / mttdCount)}s`;
+
+      alertDuration = 60;
+      timerLabel.textContent = `TIME REMAINING: ${alertDuration}s`;
+
+      alertTimer = setInterval(() => {
+        alertDuration--;
+        timerLabel.textContent = `TIME REMAINING: ${alertDuration}s`;
+        
+        if (alertDuration <= 0) {
+          // Failure State (Failure to respond in time)
+          clearInterval(alertTimer);
+          resolveTriage(false, "Timeout constraint exceeded. System breached.");
+        }
+      }, 1000);
+
+      document.getElementById('active-alert-desc').textContent = `${eventObj.desc} (MITRE: ${eventObj.mitre})`;
+    }
+
+    function triageIncident(action) {
+      if (!activeAlert) return;
+      clearInterval(alertTimer);
+
+      const mttr = Math.round((Date.now() - alertTriggerTime) / 1000);
+
+      // Determine correct decision based on critical vector scenarios
+      let isCorrect = false;
+      let reason = "";
+
+      if (activeAlert.desc.includes("ransomware") || activeAlert.mitre.includes("T1486")) {
+        // Correct Action for Ransomware: Isolate Affected Host
+        if (action === "isolate") {
+          isCorrect = true;
+          reason = "Affected machine successfully isolated. Ransomware proliferation blocked.";
+        } else {
+          reason = "Host remained active. Cryptographic payloads encrypted secondary backup servers.";
+        }
+      } else if (activeAlert.desc.includes("scan") || activeAlert.mitre.includes("T1046")) {
+        // Correct Action for Scans: Block Source IP
+        if (action === "block") {
+          isCorrect = true;
+          reason = "Source address blocked. Port scans and mapping probes neutralized.";
+        } else {
+          reason = "Scanning continued. Attacker identified open ports and launched secondary exploits.";
+        }
+      } else {
+        // Default / Gen alerts correct to isolate or escalate
+        if (action === "escalate" || action === "isolate") {
+          isCorrect = true;
+          reason = "Mitigation action deployed successfully. Threat lifecycle terminated.";
+        } else {
+          reason = "Threat managed incorrectly. Malicious beacon confirmed established C2 connections.";
+        }
+      }
+
+      // Record MTTR metric
+      mttrSum += mttr;
+      mttrCount++;
+      document.getElementById('stats-mttr').textContent = `${Math.round(mttrSum / mttrCount)}s`;
+
+      resolveTriage(isCorrect, reason, mttr);
+    }
+
+    function resolveTriage(success, msg, responseTime = 0) {
+      const alarmBanner = document.getElementById('sec-alarm');
+      const activeConsole = document.getElementById('remediation-console-active');
+      const emptyConsole = document.getElementById('remediation-console-empty');
+      const timerLabel = document.getElementById('response-timer');
+
+      alarmBanner.classList.remove('active');
+      activeConsole.style.display = 'none';
+      emptyConsole.style.display = 'block';
+      timerLabel.style.display = 'none';
+
+      if (success) {
+        scoreNeutralized++;
+        document.getElementById('stats-neutralized').textContent = scoreNeutralized;
+        grantXP(35);
+        triggerAchievement("Threat Blocked", "🛡️ Contained a critical intrusion vector.");
+        if (responseTime <= 10) {
+          triggerAchievement("Speed Demon", "⚡ Neutralized a threat in under 10 seconds.");
+        }
+        alert(`Mitigation Success: ${msg}`);
+      } else {
+        scoreBreaches++;
+        document.getElementById('stats-breaches').textContent = scoreBreaches;
+        alert(`System Compromised: ${msg}`);
+      }
+
+      activeAlert = null;
+    }
+
+    // Detail Drawer Overlay Display Controller
+    function openDrawer(eventObj) {
+      const drawer = document.getElementById('detail-drawer');
+      const title = document.getElementById('drawer-title');
+      const body = document.getElementById('drawer-body');
+
+      title.textContent = `ALERT TRIAGE REPORT: ${eventObj.id}`;
+      body.innerHTML = `
+        <strong>Timestamp    :</strong> ${eventObj.timestamp}<br>
+        <strong>Severity     :</strong> <span class="log-${eventObj.severity}">${eventObj.severity}</span><br>
+        <strong>Source Host  :</strong> ${eventObj.ip}<br>
+        <strong>Description  :</strong> ${eventObj.desc}<br><br>
+        <span style="color: var(--accent-cyan); font-weight: bold;">MITRE ATT&CK CLASSIFICATION:</span><br>
+        ➔ Techniques: ${eventObj.mitre}<br><br>
+        <span style="color: var(--accent-cyan); font-weight: bold;">PLAYBOOK RESPONSE STEPS:</span><br>
+        ${eventObj.rec}<br><br>
+        <strong>Severity Evaluation:</strong><br>
+        This alert was generated by comparing network activity logs to historical threat matrices. System recommended action must match established defense guidelines.
+      `;
+
+      drawer.classList.add('active');
+    }
+
+    function closeDrawer() {
+      document.getElementById('detail-drawer').classList.remove('active');
+    }
+
+    // Learn Mode Drawer Controller
+    function toggleLearnMode() {
+      document.getElementById('learn-sidebar-panel').classList.toggle('active');
+    }
+
+    // Dark Web Simulated Metrics Generator
+    function updateDarkWebLogs() {
+      document.getElementById('dark-creds').textContent = Math.floor(Math.random() * 12 + 3);
+      document.getElementById('dark-keys').textContent = Math.floor(Math.random() * 5 + 1);
+      document.getElementById('dark-mentions').textContent = Math.floor(Math.random() * 32 + 8);
+      document.getElementById('dark-records').textContent = (Math.floor(Math.random() * 1400 + 400)).toLocaleString();
+    }
+    // Update leak indexes periodically
+    setInterval(updateDarkWebLogs, 15000);
+    updateDarkWebLogs();
+
+    // Core Simulation Generators Execution
+    initIntelPanel();
+
+    // Map generation loop (triggers random incoming coordinate paths)
+    setInterval(injectAttackNode, 6000);
+    injectAttackNode();
+
+    // Log injector loops
+    setInterval(() => injectSIEMEvent(), 4000);
+    injectSIEMEvent();
+  </script>
+</body>
+</html>

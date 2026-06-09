@@ -1405,6 +1405,35 @@
       document.getElementById('dark-mentions').textContent = Math.floor(Math.random() * 32 + 8);
       document.getElementById('dark-records').textContent = (Math.floor(Math.random() * 1400 + 400)).toLocaleString();
     }
+    async function loadLiveThreatFeed() {
+  const actorBox = document.getElementById('intel-actor-box');
+  
+  try {
+    const response = await fetch('http://127.0.0.1:5000/api/threats/feed');
+    const data = await response.json();
+    
+    if (data.status === "success") {
+      actorBox.innerHTML = ''; // Clear fallback data
+      
+      data.feed.forEach(item => {
+        actorBox.innerHTML += `
+          <div style="margin-bottom: 8px; border-bottom: 1px dashed var(--card-border); padding-bottom: 4px;">
+            <div style="color: var(--system-amber); font-weight: bold;">
+              ${item.indicator} [${item.type}]
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-bright);">${item.pulse_title}</div>
+            <div style="color: var(--text-muted); font-size: 0.7rem;">${item.description}</div>
+          </div>
+        `;
+      });
+    }
+  } catch (error) {
+    console.error("Could not fetch live threat feed, keeping fallback data.", error);
+  }
+}
+
+// Call this function when the page loads
+window.addEventListener('DOMContentLoaded', loadLiveThreatFeed);
     // Update leak indexes periodically
     setInterval(updateDarkWebLogs, 15000);
     updateDarkWebLogs();
